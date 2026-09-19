@@ -1,0 +1,10 @@
+services:
+  finance-note:
+    build: .
+    container_name: finance-note-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./credentials:/app/credentials

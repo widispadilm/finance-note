@@ -1,0 +1,29 @@
+# Environment & Secrets
+.env
+credentials/*.json
+!credentials/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Database & runtime files
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/temp/
+*.log
+
+# Testing & IDE
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/

@@ -1,0 +1,30 @@
+[project]
+name = "finance-note"
+version = "0.1.0"
+description = "Sistem pencatatan keuangan otomatis dari Email Livin Mandiri, Screenshot GoPay (OCR), Telegram Bot, dan Google Sheets"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "python-telegram-bot[rate-limiter]>=21.0",
+    "gspread>=6.1.0",
+    "google-auth>=2.29.0",
+    "google-genai>=0.1.1",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "python-dotenv>=1.0.1",
+    "pillow>=10.3.0",
+    "rich>=13.7.1",
+    "click>=8.1.7",
+    "aiohttp>=3.9.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.6",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
