@@ -115,7 +115,10 @@ async def run_services() -> None:
         async with telegram_app:
             await telegram_app.initialize()
             await telegram_app.start()
-            await telegram_app.updater.start_polling()
+            try:
+                await telegram_app.updater.start_polling(drop_pending_updates=True)
+            except Exception as ex:
+                logger.error(f"Peringatan polling Telegram: {ex}")
 
             # Tunggu sampai stop_event menyala
             try:
@@ -126,7 +129,11 @@ async def run_services() -> None:
                 console.print("\n[yellow]Menghentikan Telegram Bot...[/yellow]")
                 email_listener.stop()
                 await http_runner.cleanup()
-                await telegram_app.updater.stop()
+                try:
+                    if telegram_app.updater and telegram_app.updater.running:
+                        await telegram_app.updater.stop()
+                except Exception:
+                    pass
                 await telegram_app.stop()
                 await telegram_app.shutdown()
     else:
