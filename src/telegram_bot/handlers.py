@@ -152,6 +152,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             card_text = format_transaction_card(tx, title="Bukti Transaksi Tersimpan", is_saved=True)
             keyboard = build_saved_transaction_keyboard(tx.id)
             await status_msg.edit_text(card_text, parse_mode="Markdown", reply_markup=keyboard)
+        elif action_or_status == "failed_sync":
+            card_text = format_transaction_card(tx, title="Bukti Transaksi Dicatat (Lokal)", is_saved=False)
+            card_text += "\n\n⚠️ _Catatan: Belum tersinkron ke Google Sheets. Periksa kredensial Google._"
+            keyboard = build_saved_transaction_keyboard(tx.id)
+            await status_msg.edit_text(card_text, parse_mode="Markdown", reply_markup=keyboard)
         else:
             # Menunggu konfirmasi
             action_id = action_or_status
@@ -194,6 +199,11 @@ async def document_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             card_text = format_transaction_card(tx, title="Bukti Transaksi Tersimpan", is_saved=True)
             keyboard = build_saved_transaction_keyboard(tx.id)
             await status_msg.edit_text(card_text, parse_mode="Markdown", reply_markup=keyboard)
+        elif action_or_status == "failed_sync":
+            card_text = format_transaction_card(tx, title="Bukti Transaksi Dicatat (Lokal)", is_saved=False)
+            card_text += "\n\n⚠️ _Catatan: Belum tersinkron ke Google Sheets. Periksa kredensial Google._"
+            keyboard = build_saved_transaction_keyboard(tx.id)
+            await status_msg.edit_text(card_text, parse_mode="Markdown", reply_markup=keyboard)
         else:
             action_id = action_or_status
             card_text = format_transaction_card(tx, title="Bukti Transaksi Terdeteksi", is_saved=False)
@@ -223,7 +233,11 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         action_id = parts[1]
         tx = await engine.confirm_and_save_transaction(action_id)
         if tx:
-            card_text = format_transaction_card(tx, title="Transaksi Berhasil Disimpan", is_saved=True)
+            is_saved = (tx.status == "TERCATAT")
+            title = "Transaksi Berhasil Disimpan" if is_saved else "Transaksi Dicatat (DB Lokal)"
+            card_text = format_transaction_card(tx, title=title, is_saved=is_saved)
+            if not is_saved:
+                card_text += "\n\n⚠️ _Catatan: Belum tersinkron ke Google Sheets. Periksa kredensial Google._"
             keyboard = build_saved_transaction_keyboard(tx.id)
             await query.edit_message_text(card_text, parse_mode="Markdown", reply_markup=keyboard)
         else:
@@ -292,8 +306,16 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     tx = engine.parse_manual_text(text)
     if tx:
         # Berhasil diparsing sebagai transaksi!
-        sheets_client.append_transaction(tx)
-        card_text = format_transaction_card(tx, title="Transaksi Manual Dicatat", is_saved=True)
+        success = sheets_client.append_transaction(tx)
+        if success:
+            tx.status = "TERCATAT"
+            db.save_transaction(tx)
+            card_text = format_transaction_card(tx, title="Transaksi Manual Dicatat", is_saved=True)
+        else:
+            tx.status = "GAGAL_SYNC"
+            db.save_transaction(tx)
+            card_text = format_transaction_card(tx, title="Transaksi Manual Dicatat (DB Lokal)", is_saved=False)
+            card_text += "\n\n⚠️ _Catatan: Belum tersinkron ke Google Sheets. Periksa kredensial Google di server._"
         keyboard = build_saved_transaction_keyboard(tx.id)
         await update.message.reply_text(card_text, parse_mode="Markdown", reply_markup=keyboard)
     else:

@@ -53,42 +53,42 @@ class GoogleSheetsClient:
                 )
                 self._client = gspread.authorize(creds)
                 logger.info("Menggunakan autentikasi Google Service Account.")
-            # 2. Cek OAuth 2.0 (authorized_user.json atau client_secret.json)
+            # 2. Cek OAuth 2.0 (authorized_user.json dari file atau environment variable)
             elif (
                 settings.resolved_authorized_user_path.exists()
                 or settings.google_authorized_user_json
-                or settings.resolved_client_secret_path.exists()
-                or (settings.google_oauth_client_id and settings.google_oauth_client_secret)
             ):
-                # Tulis authorized_user.json jika diberikan via Environment Variable (misal di Render/Cloud)
-                if not settings.resolved_authorized_user_path.exists() and settings.google_authorized_user_json:
-                    settings.resolved_authorized_user_path.parent.mkdir(parents=True, exist_ok=True)
-                    settings.resolved_authorized_user_path.write_text(settings.google_authorized_user_json.strip())
+                import json
+                from google.oauth2.credentials import Credentials as UserCredentials
 
-                # Buat client_secret.json otomatis jika ID & secret diisi langsung di .env
-                if not settings.resolved_client_secret_path.exists() and settings.google_oauth_client_id and settings.google_oauth_client_secret:
-                    settings.resolved_client_secret_path.parent.mkdir(parents=True, exist_ok=True)
-                    import json
-                    oauth_data = {
-                        "installed": {
-                            "client_id": settings.google_oauth_client_id,
-                            "client_secret": settings.google_oauth_client_secret,
-                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                            "token_uri": "https://oauth2.googleapis.com/token",
-                            "redirect_uris": ["http://localhost"],
-                        }
-                    }
-                    settings.resolved_client_secret_path.write_text(json.dumps(oauth_data, indent=2))
+                try:
+                    if settings.google_authorized_user_json:
+                        info = json.loads(settings.google_authorized_user_json.strip())
+                        settings.resolved_authorized_user_path.parent.mkdir(parents=True, exist_ok=True)
+                        settings.resolved_authorized_user_path.write_text(
+                            settings.google_authorized_user_json.strip(),
+                            encoding="utf-8",
+                        )
+                    else:
+                        info = json.loads(settings.resolved_authorized_user_path.read_text(encoding="utf-8"))
 
+                    user_creds = UserCredentials.from_authorized_user_info(info)
+                    self._client = gspread.authorize(user_creds)
+                    logger.info("Menggunakan autentikasi Google OAuth 2.0 (UserCredentials).")
+                except Exception as ex:
+                    logger.error(f"Gagal menginisialisasi OAuth kredensial: {ex}", exc_info=True)
+                    raise
+            # 3. Cek client_secret.json lokal
+            elif settings.resolved_client_secret_path.exists() or (settings.google_oauth_client_id and settings.google_oauth_client_secret):
                 self._client = gspread.oauth(
                     credentials_filename=str(settings.resolved_client_secret_path),
                     authorized_user_filename=str(settings.resolved_authorized_user_path),
                     scopes=SCOPES,
                 )
-                logger.info("Menggunakan autentikasi Google OAuth 2.0.")
+                logger.info("Menggunakan autentikasi Google OAuth 2.0 (gspread.oauth).")
             else:
                 raise FileNotFoundError(
-                    f"Kredensial Google Sheets tidak ditemukan. Letakkan service_account.json atau client_secret.json di credentials/"
+                    "Kredensial Google Sheets tidak ditemukan. Letakkan authorized_user.json atau atur GOOGLE_AUTHORIZED_USER_JSON."
                 )
         return self._client
 
@@ -136,9 +136,13 @@ class GoogleSheetsClient:
         # Selalu simpan juga ke database SQLite lokal
         db.save_transaction(tx)
 
-        if not self.is_configured() or settings.mock_mode:
-            logger.info(f"[MOCK/LOCAL] Transaksi dicatat ke DB lokal: {tx.formatted_amount} ({tx.description})")
+        if settings.mock_mode:
+            logger.info(f"[MOCK] Transaksi dicatat ke DB lokal: {tx.formatted_amount} ({tx.description})")
             return True
+
+        if not self.is_configured():
+            logger.warning(f"Google Sheets belum dikonfigurasi. Transaksi {tx.id} hanya disimpan ke DB lokal.")
+            return False
 
         try:
             ss = self._get_spreadsheet()

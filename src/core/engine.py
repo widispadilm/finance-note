@@ -76,13 +76,15 @@ class FinanceEngine:
 
         # Catat ke Google Sheets & DB lokal
         success = self.sheets.append_transaction(tx)
+        tx.status = "TERCATAT" if success else "GAGAL_SYNC"
+        db.save_transaction(tx)
 
         # Kirim notifikasi realtime ke Telegram pengguna jika bot aktif
         if self._telegram_bot and settings.is_telegram_configured:
             message_text = format_transaction_card(
                 tx,
                 title="Notifikasi Transaksi Livin' Mandiri",
-                is_saved=True,
+                is_saved=success,
             )
             keyboard = build_saved_transaction_keyboard(tx.id)
 
@@ -114,8 +116,10 @@ class FinanceEngine:
 
         # Cek apakah mode auto-confirm aktif
         if settings.auto_confirm_screenshot:
-            self.sheets.append_transaction(tx)
-            return tx, "saved"
+            success = self.sheets.append_transaction(tx)
+            tx.status = "TERCATAT" if success else "GAGAL_SYNC"
+            db.save_transaction(tx)
+            return tx, "saved" if success else "failed_sync"
 
         # Simpan sebagai aksi tertunda menunggu konfirmasi tombol
         action_id = uuid.uuid4().hex[:10]
@@ -128,8 +132,9 @@ class FinanceEngine:
         if not tx:
             return None
 
-        tx.status = "TERCATAT"
-        self.sheets.append_transaction(tx)
+        success = self.sheets.append_transaction(tx)
+        tx.status = "TERCATAT" if success else "GAGAL_SYNC"
+        db.save_transaction(tx)
         db.delete_pending_action(action_id)
         return tx
 

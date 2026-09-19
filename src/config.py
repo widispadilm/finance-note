@@ -156,6 +156,8 @@ class Settings(BaseSettings):
         has_id = bool(self.google_spreadsheet_id and self.google_spreadsheet_id != "your_google_spreadsheet_id_here")
         has_auth = (
             self.resolved_service_account_path.exists()
+            or self.resolved_authorized_user_path.exists()
+            or bool(self.google_authorized_user_json)
             or self.resolved_client_secret_path.exists()
             or (bool(self.google_oauth_client_id) and bool(self.google_oauth_client_secret))
         )
